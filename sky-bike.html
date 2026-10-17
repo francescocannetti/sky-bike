@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Sky Bike</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#9fd6ff;font-family:system-ui,sans-serif;touch-action:none;user-select:none}
+canvas{display:block}
+#hud{position:fixed;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 0;color:#fff;text-shadow:0 1px 4px #0007;display:flex;justify-content:space-between;pointer-events:none;font-weight:700;font-size:15px}
+#hint{position:fixed;top:45%;width:100%;text-align:center;color:#fff;text-shadow:0 1px 4px #0008;font-weight:600;pointer-events:none;transition:opacity 2s}
+#ctl{position:fixed;bottom:0;left:0;right:0;display:none;justify-content:space-between;padding:14px 14px calc(env(safe-area-inset-bottom,0px) + 14px)}
+@media (hover:none),(pointer:coarse){#ctl{display:flex}}
+#ctl.on{display:flex}
+body{-webkit-touch-callout:none;-webkit-user-select:none;overscroll-behavior:none}
+#ctl div{display:flex;gap:10px}
+button{width:76px;height:76px;border-radius:50%;border:2px solid #fff6;background:#0006;color:#fff;font-size:26px;touch-action:none;-webkit-tap-highlight-color:transparent}
+button:active{background:#fff6}
+</style></head><body>
+<div id="hud"><span id="on">Connessione…</span><span id="sc">Anelli: 0</span><span id="sp"></span></div>
+<div id="hint">Telefono: ◀ ▶ sterza · ⚡ accelera · 🪽 vola<br>PC: WASD / frecce · SPAZIO = vola · SHIFT = picchiata<br>Raccogli gli anelli in cielo!</div>
+<div id="ctl"><div><button data-k="KeyA">◀</button><button data-k="KeyD">▶</button></div><div><button data-k="Space">🪽</button><button data-k="KeyS">🛑</button><button data-k="KeyW">⚡</button></div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const $=i=>document.getElementById(i);
+const R=new THREE.WebGLRenderer({antialias:true});
+R.setSize(innerWidth,innerHeight);R.setPixelRatio(Math.min(devicePixelRatio,2));
+document.body.appendChild(R.domElement);
+const S=new THREE.Scene();S.background=new THREE.Color(0x9fd6ff);S.fog=new THREE.Fog(0x9fd6ff,80,450);
+const C=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.1,700);
+S.add(new THREE.HemisphereLight(0xffffff,0x6a9a55,1));
+const sun=new THREE.DirectionalLight(0xffffff,.8);sun.position.set(50,100,30);S.add(sun);
+const gr=new THREE.Mesh(new THREE.PlaneGeometry(3000,3000),new THREE.MeshLambertMaterial({color:0x72b85a}));
+gr.rotation.x=-Math.PI/2;S.add(gr);
+// mondo condiviso (seme fisso: tutti vedono lo stesso mondo)
+let sd=42;const rnd=()=>{sd|=0;sd=sd+0x6D2B79F5|0;let t=Math.imul(sd^sd>>>15,1|sd);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+const tg=new THREE.ConeGeometry(2.2,7,6),kg=new THREE.CylinderGeometry(.4,.4,2),tm=new THREE.MeshLambertMaterial({color:0x2f7a3a}),km=new THREE.MeshLambertMaterial({color:0x6b4a2b});
+for(let i=0;i<220;i++){const g=new THREE.Group(),a=new THREE.Mesh(tg,tm),b=new THREE.Mesh(kg,km);a.position.y=5;b.position.y=1;g.add(a,b);g.position.set((rnd()-.5)*1200,0,(rnd()-.5)*1200);g.scale.setScalar(.8+rnd()*1.5);S.add(g)}
+const rings=[],rg=new THREE.TorusGeometry(4,.5,8,24),rm=new THREE.MeshLambertMaterial({color:0xffc83d,emissive:0x664400});
+for(let i=0;i<30;i++){const m=new THREE.Mesh(rg,rm);m.position.set((rnd()-.5)*700,12+rnd()*70,(rnd()-.5)*700);m.rotation.y=rnd()*3;m.userData.t=0;S.add(m);rings.push(m)}
+// bici
+function label(t){const c=document.createElement('canvas');c.width=256;c.height=64;const x=c.getContext('2d');x.font='bold 34px sans-serif';x.textAlign='center';x.fillStyle='#fff';x.strokeStyle='#0008';x.lineWidth=6;x.strokeText(t,128,44);x.fillText(t,128,44);const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),depthTest:false}));s.scale.set(5,1.25,1);s.position.y=3.2;return s}
+const wg=new THREE.TorusGeometry(.4,.09,8,16),wm=new THREE.MeshLambertMaterial({color:0x222222});
+function bike(col,name){
+  const g=new THREE.Group(),cm=new THREE.MeshLambertMaterial({color:col});
+  g.rotation.order='YXZ';
+  [-.8,.8].forEach(z=>{const w=new THREE.Mesh(wg,wm);w.rotation.y=Math.PI/2;w.position.set(0,.5,z);g.add(w)});
+  const f=new THREE.Mesh(new THREE.BoxGeometry(.15,.15,1.7),cm);f.position.y=.9;g.add(f);
+  const r=new THREE.Mesh(new THREE.BoxGeometry(.5,.9,.4),cm);r.position.set(0,1.5,.1);g.add(r);
+  const h=new THREE.Mesh(new THREE.SphereGeometry(.3,8,8),new THREE.MeshLambertMaterial({color:0xffd9b0}));h.position.set(0,2.15,0);g.add(h);
+  const wing=new THREE.MeshLambertMaterial({color:0xffffff});
+  [-1,1].forEach(s=>{const w=new THREE.Mesh(new THREE.BoxGeometry(2.6,.06,.9),wing);w.position.set(s*1.6,1.6,.2);w.rotation.z=s*-.12;g.add(w)});
+  g.add(label(name));g.userData.w=g.children.slice(0,2);S.add(g);return g}
+const hue=Math.random(),col=new THREE.Color().setHSL(hue,.8,.5),name='Pilota'+(100+Math.floor(Math.random()*900));
+const me={x:0,y:0,z:0,h:0,v:0,vy:0,st:0},mine=bike(col,name),keys={};
+addEventListener('keydown',e=>{keys[e.code]=1;if(e.code=='Space')e.preventDefault()});
+addEventListener('keyup',e=>keys[e.code]=0);
+addEventListener('touchstart',()=>$('ctl').classList.add('on'),{once:true});
+addEventListener('contextmenu',e=>e.preventDefault());
+document.querySelectorAll('#ctl button').forEach(b=>{const k=b.dataset.k;b.onpointerdown=e=>{keys[k]=1;b.setPointerCapture(e.pointerId)};b.onpointerup=b.onpointercancel=()=>keys[k]=0});
+addEventListener('resize',()=>{R.setSize(innerWidth,innerHeight);C.aspect=innerWidth/innerHeight;C.updateProjectionMatrix()});
+// multiplayer
+const others={};let room=null,score=0;
+const la=(a,b,t)=>a+Math.atan2(Math.sin(b-a),Math.cos(b-a))*t;
+function sync(){const ps=room.peers().filter(p=>!p.isMe&&p.presence&&p.presence.x!=null);const ids=new Set(ps.map(p=>p.peer));
+  ps.forEach(p=>{const d=p.presence;let o=others[p.peer];if(!o){o={m:bike(new THREE.Color().setHSL(d.c||0,.8,.5),d.n||'Ospite')};o.m.position.set(d.x,d.y,d.z);others[p.peer]=o}o.d=d});
+  Object.keys(others).forEach(k=>{if(!ids.has(k)){S.remove(others[k].m);delete others[k]}});
+  $('on').textContent='Online: '+(ps.length+1)}
+(async()=>{try{room=await claude.use('room')}catch(e){}
+  if(!room){$('on').textContent='Solo (offline)';return}
+  room.onPeers(sync);sync();
+  setInterval(()=>room.presence({x:+me.x.toFixed(1),y:+me.y.toFixed(1),z:+me.z.toFixed(1),h:+me.h.toFixed(2),p:+mine.rotation.x.toFixed(2),b:+mine.rotation.z.toFixed(2),n:name,c:hue}).catch(()=>{}),100)})();
+// ciclo
+let last=performance.now();
+function loop(now){requestAnimationFrame(loop);const dt=Math.min((now-last)/1000,.05);last=now;
+  const gas=keys.KeyW||keys.ArrowUp,br=keys.KeyS||keys.ArrowDown,fly=keys.Space,dive=keys.ShiftLeft||keys.ShiftRight;
+  const st=((keys.KeyA||keys.ArrowLeft)?1:0)-((keys.KeyD||keys.ArrowRight)?1:0);
+  const max=fly?55:38;
+  if(gas)me.v+=22*dt;else if(br)me.v-=30*dt;else me.v-=me.v*.25*dt;
+  me.v=Math.max(0,Math.min(max,me.v));if(me.v>max-1)me.v-=8*dt;
+  me.st+=(st-me.st)*Math.min(1,6*dt);
+  me.h+=me.st*dt*1.5*Math.min(1,me.v/8);
+  const tvy=fly?11:dive?-16:(me.y>0?-2.5:0);me.vy+=(tvy-me.vy)*Math.min(1,3*dt);
+  me.y=Math.max(0,Math.min(160,me.y+me.vy*dt));if(me.y==0&&me.vy<0)me.vy=0;
+  me.x-=Math.sin(me.h)*me.v*dt;me.z-=Math.cos(me.h)*me.v*dt;
+  mine.position.set(me.x,me.y,me.z);mine.rotation.set(Math.atan2(me.vy,Math.max(me.v,6))*.7,me.h,me.st*.45);
+  mine.userData.w.forEach(w=>w.rotation.x+=me.v*dt*2.5);
+  const tx=me.x+Math.sin(me.h)*10,tz=me.z+Math.cos(me.h)*10,ty=me.y+4.5;
+  C.position.x+=(tx-C.position.x)*Math.min(1,5*dt);C.position.y+=(ty-C.position.y)*Math.min(1,5*dt);C.position.z+=(tz-C.position.z)*Math.min(1,5*dt);
+  C.lookAt(me.x-Math.sin(me.h)*8,me.y+1.5,me.z-Math.cos(me.h)*8);
+  for(const k in others){const o=others[k],d=o.d,m=o.m;if(!d)continue;const t=Math.min(1,10*dt);
+    m.position.x+=(d.x-m.position.x)*t;m.position.y+=(d.y-m.position.y)*t;m.position.z+=(d.z-m.position.z)*t;
+    m.rotation.y=la(m.rotation.y,d.h,t);m.rotation.x=d.p||0;m.rotation.z=d.b||0}
+  rings.forEach(r=>{if(r.userData.t>0){r.userData.t-=dt;r.visible=r.userData.t<=0;return}r.rotation.z+=dt;
+    if(r.position.distanceTo(mine.position)<5){r.userData.t=6;r.visible=false;score++;$('sc').textContent='Anelli: '+score}});
+  $('sp').textContent=Math.round(me.v*3.6)+' km/h · '+Math.round(me.y)+' m';
+  R.render(S,C)}
+requestAnimationFrame(loop);
+setTimeout(()=>$('hint').style.opacity=0,6000);
+</script></body></html>
